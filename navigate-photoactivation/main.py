@@ -1,5 +1,5 @@
 import tkinter
-from view.plugin_name_frame import PluginNameFrame
+from view.photoactivation_frame import PluginNameFrame
 
 def main():
     print("starting plugin name!")

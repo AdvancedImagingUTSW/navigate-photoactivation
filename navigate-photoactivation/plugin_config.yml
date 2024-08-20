@@ -1,9 +1,9 @@
-name: Plugin Name
-view: Popup # Tab or Popup if has an GUI
+name: Photoactivation
+view: Tab # Tab or Popup if has an GUI
 
 acquisition_modes: 
-  - name: Plugin Acquisition
-    file_name: plugin_acquisition_mode.py
+  - name: Photoactivation
+    file_name: photoactivation.py
 
 ###################################################################
 # how to add plugin device in the .navigate/configuration.yaml file
