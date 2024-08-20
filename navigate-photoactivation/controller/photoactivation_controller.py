@@ -36,7 +36,6 @@
 
 # Local Imports
 
-
 class PhotoactivationController:
     def __init__(self, view, parent_controller=None):
 
@@ -49,20 +48,82 @@ class PhotoactivationController:
         #: dict: The variables from the view
         self.variables = self.view.get_variables()
 
+        #: dict: The buttons from the view
+        self.buttons = self.view.get_buttons()
 
-        self.buttons = self.view.buttons
+        #: dict: The widgets from the view
+        self.widgets = self.view.get_widgets()
 
-        # #################################
-        # ##### Example Widget Events #####
-        # #################################
-        self.buttons["move"].configure(command=self.move)
+        self.microscope_name = self.parent_controller.configuration[
+            "experiment"]["MicroscopeState"]["microscope_name"]
+
+        self.configuration = self.parent_controller.configuration[
+            "configuration"]["microscopes"]
+
+        #: float: The offset in the x direction
+        self.offset_x = 0
+
+        #: float: The offset in the y direction
+        self.offset_y = 0
+
+        self.populate_widgets()
+        self.set_menu_entries()
+
+        # Tkinter Events
+        self.buttons["execute"].configure(command=self.move)
+
+    def populate_widgets(self):
+        """Populate the default values for the widgets """
+        # Laser Wavelengths - "Laser"
+        setting_dict = self.parent_controller.configuration_controller.channels_info
+        self.widgets["Laser"]["values"] = setting_dict["laser"]
+        self.widgets["Laser"].set(setting_dict["laser"][0])
+
+        # Laser Switching - "Pinout - Laser Switch"
+        switch = self.configuration[self.microscope_name]["daq"]["laser_port_switcher"]
+        self.widgets["Pinout - Laser Switch"].set(switch)
+
+        # Laser Power - "Power"
+        self.widgets["Power"].set(10)
+
+        # Duration (ms) - "Duration"
+        self.widgets["Duration (ms)"].set(10)
+
+        # Pattern - "Pattern"
+        self.widgets["Pattern"]["values"] = ["Point", "Square", "Circle"]
+        self.widgets["Pattern"].set("Point")
+
+        # Pinouts for Galvos TODO: Add as plugin configuration entry
+        self.widgets["Pinout - X Galvo"].set("PCIE6738/ao0")
+        self.widgets["Pinout - Y Galvo"].set("PCIE6738/ao1")
+
+        # Volts per Micron TODO: Add as plugin configuration entry
+        self.widgets["Volts per Micron - X"].set(0.05)
+        self.widgets["Volts per Micron - Y"].set(0.05)
+
+        # Photoactivation Offset
+        self.widgets["Photoactivation Offset X"].set(self.offset_x)
+        self.widgets["Photoactivation Offset Y"].set(self.offset_y)
+
+    def set_menu_entries(self):
+        """Set the menu entries for the plugin in the view"""
+        self.parent_controller.camera_view_controller.menu.add_command(
+            label="Photoactivate Here", command=self.mark_position)
 
     def move(self, *args):
-        """Example function to move the plugin device
-        """
-
+        """Example function to move the plugin device"""
         print("*** Move button is clicked!")
-        self.parent_controller.execute("move_plugin_device", self.variables["plugin_name"].get())
+        #self.parent_controller.execute("move_plugin_device", self.variables[
+        # "plugin_name"].get())
 
+    def mark_position(self, *args):
+        """Mark the current position of the microscope"""
+        self.offset_x, self.offset_y = (
+            self.parent_controller.camera_view_controller.calculate_offset()
+        )
+        self.widgets["Photoactivation Offset X"].set(self.offset_x)
+        self.widgets["Photoactivation Offset Y"].set(self.offset_y)
+
+        #self.parent_controller.execute("mark_position")
 
     

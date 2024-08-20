@@ -3,9 +3,9 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "plugins_template"
+name = "navigate-photoactivation"
 version = "0.0.1"
-description = "Open source, smart, light-sheet microscopy control software plugin template."
+description = "Event-Driven Photoactivation."
 authors = [{name = "The Dean Lab, UT Southwestern Medical Center"}]
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -21,7 +21,7 @@ classifiers = [
 ]
 
 [project.urls]
-Source = "https://github.com/TheDeanLab/navigate-plugin-template"
+Source = "https://github.com/TheDeanLab/navigate-photoactivation"
 
 [project.entry-points."navigate.plugins"]
 plugin_name = "plugins_template.main:main"

@@ -29,19 +29,15 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+
 # Standard Library Imports
 
 # Third Party Imports
 
 # Local Imports
-from navigate.tools.decorators import FeatureList
-from navigate.model.features.feature_related_functions import (
-    ExampleFeature,
-)
 
+class PhotoactivationModel:
+    """Model for the Photoactivation Plugin"""
 
-@FeatureList
-def example_feature():
-    return [
-        {"name": ExampleFeature},
-    ]
+    def __init__(self):
+        pass

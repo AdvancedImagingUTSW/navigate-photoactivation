@@ -42,7 +42,7 @@ from navigate.view.custom_widgets.LabelInputWidgetFactory import LabelInput
 from navigate.view.custom_widgets.validation import ValidatedSpinbox
 from navigate.view.custom_widgets.validation import ValidatedEntry
 
-class PluginNameFrame(ttk.Frame):
+class PhotoactivationFrame(ttk.Frame):
     """Plugin Frame: Just an example
 
     This frame contains the widgets for the plugin.
@@ -85,12 +85,13 @@ class PluginNameFrame(ttk.Frame):
             "Power": ValidatedSpinbox,
             "Duration (ms)": ValidatedSpinbox,
             "Pattern": ttk.Combobox,
-            "Pinout - X": ValidatedEntry,
-            "Pinout - Y": ValidatedEntry,
+            "Pinout - X Galvo": ValidatedEntry,
+            "Pinout - Y Galvo": ValidatedEntry,
             "Pinout - Laser Switch": ValidatedEntry,
             "Volts per Micron - X": ValidatedEntry,
             "Volts per Micron - Y": ValidatedEntry,
-
+            "Photoactivation Offset X": ValidatedEntry,
+            "Photoactivation Offset Y": ValidatedEntry,
         }
 
         # Create the widgets
@@ -102,14 +103,20 @@ class PluginNameFrame(ttk.Frame):
 
             self.variables[key] = tk.StringVar()
             self.inputs[key] = widget(
-                self, textvariable=self.variables[key], width=10
+                self, textvariable=self.variables[key], width=20
             )
             self.inputs[key].grid(row=counter, column=1, pady=3, padx=5)
             counter += 1
 
-        # Configure readonly state for select comboboxes
-        self.inputs["Laser"].config(state="readonly")
-        self.inputs["Pattern"].config(state="readonly")
+        for key in ["Pinout - X Galvo",
+                    "Pinout - Y Galvo",
+                    "Pinout - Laser Switch",
+                    "Photoactivation Offset X",
+                    "Photoactivation Offset Y"
+        ]:
+            self.inputs[key].configure(state="disabled")
+
+        self.inputs["Laser"].configure(state="readonly")
 
         # Execute Button
         self.buttons["execute"] = HoverTkButton(
@@ -159,11 +166,3 @@ class PluginNameFrame(ttk.Frame):
             Dictionary of the buttons in this frame.
         """
         return self.buttons
-
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.title("Photoactivation Plugin")
-    frame = PluginNameFrame(root)
-    frame.pack()
-    root.mainloop()
