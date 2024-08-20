@@ -37,6 +37,7 @@ import tkinter
 # Local Imports
 from view.photoactivation_frame import PhotoactivationFrame
 
+
 def main():
     root = tkinter.Tk()
     frame = PhotoactivationFrame(root)

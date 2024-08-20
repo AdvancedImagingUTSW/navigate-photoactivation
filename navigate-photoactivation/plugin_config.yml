@@ -1,7 +1,7 @@
 name: Photoactivation
 view: Tab # Tab or Popup if has an GUI
 
-acquisition_modes: 
+acquisition_modes:
   - name: Photoactivation
     file_name: photoactivation.py
 

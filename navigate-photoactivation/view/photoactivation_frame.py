@@ -38,9 +38,9 @@ from tkinter import ttk
 
 # Local Imports
 from navigate.view.custom_widgets.hover import HoverTkButton
-from navigate.view.custom_widgets.LabelInputWidgetFactory import LabelInput
 from navigate.view.custom_widgets.validation import ValidatedSpinbox
 from navigate.view.custom_widgets.validation import ValidatedEntry
+
 
 class PhotoactivationFrame(ttk.Frame):
     """Plugin Frame: Just an example
@@ -99,36 +99,29 @@ class PhotoactivationFrame(ttk.Frame):
         for key, widget in widget_dict.items():
             label = f"{key:<30}"
             ttk.Label(self, text=label).grid(
-                row=counter, column=0, pady=3, padx=5, sticky=tk.NW)
+                row=counter, column=0, pady=3, padx=5, sticky=tk.NW
+            )
 
             self.variables[key] = tk.StringVar()
-            self.inputs[key] = widget(
-                self, textvariable=self.variables[key], width=20
-            )
+            self.inputs[key] = widget(self, textvariable=self.variables[key], width=20)
             self.inputs[key].grid(row=counter, column=1, pady=3, padx=5)
             counter += 1
 
-        for key in ["Pinout - X Galvo",
-                    "Pinout - Y Galvo",
-                    "Pinout - Laser Switch",
-                    "Photoactivation Offset X",
-                    "Photoactivation Offset Y"
+        for key in [
+            "Pinout - X Galvo",
+            "Pinout - Y Galvo",
+            "Pinout - Laser Switch",
+            "Photoactivation Offset X",
+            "Photoactivation Offset Y",
         ]:
             self.inputs[key].configure(state="disabled")
 
         self.inputs["Laser"].configure(state="readonly")
 
         # Execute Button
-        self.buttons["execute"] = HoverTkButton(
-            self,
-            text="START",
-            borderwidth=0
-        )
+        self.buttons["execute"] = HoverTkButton(self, text="START", borderwidth=0)
         self.buttons["execute"].grid(row=counter, column=1, sticky="N", padx=6)
-        self.buttons["execute"].hover.setdescription(
-            "Perform Photoactivation"
-        )
-
+        self.buttons["execute"].hover.setdescription("Perform Photoactivation")
 
     # Getters
     def get_variables(self):

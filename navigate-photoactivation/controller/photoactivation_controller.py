@@ -36,6 +36,7 @@
 
 # Local Imports
 
+
 class PhotoactivationController:
     def __init__(self, view, parent_controller=None):
 
@@ -54,11 +55,13 @@ class PhotoactivationController:
         #: dict: The widgets from the view
         self.widgets = self.view.get_widgets()
 
-        self.microscope_name = self.parent_controller.configuration[
-            "experiment"]["MicroscopeState"]["microscope_name"]
+        self.microscope_name = self.parent_controller.configuration["experiment"][
+            "MicroscopeState"
+        ]["microscope_name"]
 
-        self.configuration = self.parent_controller.configuration[
-            "configuration"]["microscopes"]
+        self.configuration = self.parent_controller.configuration["configuration"][
+            "microscopes"
+        ]
 
         #: float: The offset in the x direction
         self.offset_x = 0
@@ -73,7 +76,7 @@ class PhotoactivationController:
         self.buttons["execute"].configure(command=self.move)
 
     def populate_widgets(self):
-        """Populate the default values for the widgets """
+        """Populate the default values for the widgets"""
         # Laser Wavelengths - "Laser"
         setting_dict = self.parent_controller.configuration_controller.channels_info
         self.widgets["Laser"]["values"] = setting_dict["laser"]
@@ -108,22 +111,22 @@ class PhotoactivationController:
     def set_menu_entries(self):
         """Set the menu entries for the plugin in the view"""
         self.parent_controller.camera_view_controller.menu.add_command(
-            label="Photoactivate Here", command=self.mark_position)
+            label="Photoactivate Here", command=self.mark_position
+        )
 
     def move(self, *args):
         """Example function to move the plugin device"""
         print("*** Move button is clicked!")
-        #self.parent_controller.execute("move_plugin_device", self.variables[
+        # self.parent_controller.execute("move_plugin_device", self.variables[
         # "plugin_name"].get())
 
     def mark_position(self, *args):
         """Mark the current position of the microscope"""
-        self.offset_x, self.offset_y = (
-            self.parent_controller.camera_view_controller.calculate_offset()
-        )
+        (
+            self.offset_x,
+            self.offset_y,
+        ) = self.parent_controller.camera_view_controller.calculate_offset()
         self.widgets["Photoactivation Offset X"].set(self.offset_x)
         self.widgets["Photoactivation Offset Y"].set(self.offset_y)
 
-        #self.parent_controller.execute("mark_position")
-
-    
+        # self.parent_controller.execute("mark_position")
