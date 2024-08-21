@@ -64,16 +64,86 @@ class PhotoactivationController:
         ]
 
         #: float: The offset in the x direction
-        self.offset_x = 0
+        self.location_x = 0
 
         #: float: The offset in the y direction
-        self.offset_y = 0
+        self.location_y = 0
 
+        #: float: The volts per micron for the x galvo
+        self.x_scaling_factor = 1
+
+        #: float: The volts per micron for the y galvo
+        self.y_scaling_factor = 1
+
+        #: str: The pinout for the x galvo
+        self.pinout_x = None
+
+        #: str: The pinout for the y galvo
+        self.pinout_y = None
+
+        #: str: The pinout for the laser switch
+        self.switch = None
+
+        # Default location for communicating with the plugin in the model.
+        self.parent_controller.configuration["experiment"]["Photoactivation"] = {}
+
+        self.get_default_configuration()
         self.populate_widgets()
         self.set_menu_entries()
+        self.configure_widget_events()
 
-        # Tkinter Events
-        self.buttons["execute"].configure(command=self.move)
+    def get_default_configuration(self):
+        """Get the default configuration for the plugin"""
+        # TODO: Retrieve the values from the plugin configuration file.
+        self.pinout_x = "PCIE6738/ao0"
+        self.pinout_y = "PCIE6738/ao1"
+
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "x_pinout"
+        ] = self.pinout_x
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "y_pinout"
+        ] = self.pinout_y
+        self.switch = self.configuration[self.microscope_name]["daq"][
+            "laser_port_switcher"
+        ]
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "laser_switch"
+        ] = self.switch
+
+        self.y_scaling_factor = 0.05
+        self.x_scaling_factor = 0.05
+
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "y_scaling_factor"
+        ] = self.y_scaling_factor
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "x_scaling_factor"
+        ] = self.x_scaling_factor
+
+    def update_configuration(self, *args):
+        """Retrieve values from GUI and update the experiment configuration.
+
+        This function is called everytime the user changes a value in the GUI.
+        """
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "laser"
+        ] = int(self.widgets["Laser"].get().rstrip("nm"))
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "power"
+        ] = float(self.widgets["Power"].get())
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "duration"
+        ] = int(self.widgets["Duration (ms)"].get())
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "pattern"
+        ] = str(self.widgets["Pattern"].get())
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "location_x"
+        ] = float(self.widgets["Photoactivation Offset X"].get())
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "location_y"
+        ] = float(self.widgets["Photoactivation Offset Y"].get())
 
     def populate_widgets(self):
         """Populate the default values for the widgets"""
@@ -82,9 +152,8 @@ class PhotoactivationController:
         self.widgets["Laser"]["values"] = setting_dict["laser"]
         self.widgets["Laser"].set(setting_dict["laser"][0])
 
-        # Laser Switching - "Pinout - Laser Switch"
-        switch = self.configuration[self.microscope_name]["daq"]["laser_port_switcher"]
-        self.widgets["Pinout - Laser Switch"].set(switch)
+        # Laser Switch - "Pinout - Laser Switch"
+        self.widgets["Pinout - Laser Switch"].set(self.switch)
 
         # Laser Power - "Power"
         self.widgets["Power"].set(10)
@@ -96,17 +165,24 @@ class PhotoactivationController:
         self.widgets["Pattern"]["values"] = ["Point", "Square", "Circle"]
         self.widgets["Pattern"].set("Point")
 
-        # Pinouts for Galvos TODO: Add as plugin configuration entry
-        self.widgets["Pinout - X Galvo"].set("PCIE6738/ao0")
-        self.widgets["Pinout - Y Galvo"].set("PCIE6738/ao1")
+        # Pin outs for Galvos
+        self.widgets["Pinout - X Galvo"].set(self.pinout_x)
+        self.widgets["Pinout - Y Galvo"].set(self.pinout_y)
 
-        # Volts per Micron TODO: Add as plugin configuration entry
-        self.widgets["Volts per Micron - X"].set(0.05)
-        self.widgets["Volts per Micron - Y"].set(0.05)
+        # Volts per Micron
+        self.widgets["Volts per Micron - X"].set(self.x_scaling_factor)
+        self.widgets["Volts per Micron - Y"].set(self.y_scaling_factor)
 
         # Photoactivation Offset
-        self.widgets["Photoactivation Offset X"].set(self.offset_x)
-        self.widgets["Photoactivation Offset Y"].set(self.offset_y)
+        self.widgets["Photoactivation Offset X"].set(self.location_x)
+        self.widgets["Photoactivation Offset Y"].set(self.location_y)
+
+    def configure_widget_events(self):
+        """Add the event traces to the widgets."""
+        self.widgets["Laser"].bind("<FocusOut>", self.update_configuration)
+        self.widgets["Power"].bind("<FocusOut>", self.update_configuration)
+        self.widgets["Duration (ms)"].bind("<FocusOut>", self.update_configuration)
+        self.widgets["Pattern"].bind("<FocusOut>", self.update_configuration)
 
     def set_menu_entries(self):
         """Set the menu entries for the plugin in the view"""
@@ -114,19 +190,21 @@ class PhotoactivationController:
             label="Photoactivate Here", command=self.mark_position
         )
 
-    def move(self, *args):
-        """Example function to move the plugin device"""
-        print("*** Move button is clicked!")
-        # self.parent_controller.execute("move_plugin_device", self.variables[
-        # "plugin_name"].get())
-
     def mark_position(self, *args):
         """Mark the current position of the microscope"""
         (
-            self.offset_x,
-            self.offset_y,
+            self.location_x,
+            self.location_y,
         ) = self.parent_controller.camera_view_controller.calculate_offset()
-        self.widgets["Photoactivation Offset X"].set(self.offset_x)
-        self.widgets["Photoactivation Offset Y"].set(self.offset_y)
 
-        # self.parent_controller.execute("mark_position")
+        # Update the offset values in the view
+        self.widgets["Photoactivation Offset X"].set(self.location_x)
+        self.widgets["Photoactivation Offset Y"].set(self.location_y)
+
+        # Update the offset values in the configuration
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "location_x"
+        ] = self.location_x
+        self.parent_controller.configuration["experiment"]["Photoactivation"][
+            "location_y"
+        ] = self.location_y

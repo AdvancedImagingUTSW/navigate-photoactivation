@@ -35,13 +35,11 @@
 
 # Local Imports
 from navigate.tools.decorators import FeatureList
-from navigate.model.features.feature_related_functions import (
-    ExampleFeature,
-)
+from model.features.photoactivation import Photoactivation
 
 
 @FeatureList
-def example_feature():
+def photoactivation_features():
     return [
-        {"name": ExampleFeature},
+        {"name": Photoactivation},
     ]
