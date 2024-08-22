@@ -40,7 +40,21 @@ import nidaqmx.task
 
 
 class Photoactivation:
-    """Photoactivation feature"""
+    """Photoactivation feature.
+
+    Note
+    ----
+        For the config_table, the need_response parameter if set to True requires
+        an image to be received by the camera before proceeding. If set to False,
+        the feature will proceed without waiting for an image to be received.
+
+    Note
+    ----
+        One-step indicates that the sequence will only be run once. A good example
+        of one-step is snap-image, whereas z-stack is a good example of a multi-step
+        feature. Multi-step functions always calls the end-func to see if all of the
+        signals have been delivered.
+    """
 
     def __init__(self, model, *args):
         """Initialize the feature.
@@ -55,19 +69,12 @@ class Photoactivation:
             "signal": {
                 "init": self.pre_func_signal,
                 "main": self.in_func_signal,
-                "end": self.end_func_signal,
                 "cleanup": self.cleanup_func_signal,
             },
-            "data": {
-                "init": self.pre_func_data,
-                "main": self.in_func_data,
-                "end": self.end_func_data,
-                "cleanup": self.cleanup_func_data,
-            },
             "node": {
-                "node_type": "multi-step",  # "multi-step" or "one-step"
-                "device_related": True,  # True or False
-                "need_response": True,  # True or False
+                "node_type": "one-step",
+                "device_related": True,
+                "need_response": False,
             },
         }
 
@@ -75,7 +82,7 @@ class Photoactivation:
         self.model = model
 
         #: str: The type of stimulation. Currently only "point" is supported.
-        self.stimulation_type = "point"
+        self.pattern = "point"
 
         #: float: The offset of the photoactivation event in microns in the x direction.
         self.location_x = None
@@ -84,34 +91,40 @@ class Photoactivation:
         self.location_y = None
 
         #: int: The laser wavelength
-        self.laser_wavelength = None
+        self.wavelength = None
 
         #: str: The pinout for the laser switching galvo.
-        self.switching_port = None
+        self.laser_port_switcher = None
 
-        #: str: The trigger source for the DAQ.
-        self.trigger_source = None
+        #: str: The trigger for the photoactivation. Delivers TTL.
+        self.photoactivation_trigger = None
+
+        #: str: The trigger source for the DAQ. Receives TTL.
+        self.photoactivation_source = None
+
+        #: nidaqmx.Task: The master trigger task for the DAQ.
+        self.photoactivation_trigger_task = None
 
         #: nidaqmx.Task: The digital output task for switching lasers.
         self.switch_task = None
 
         #: str: The pinout for the x galvo.
-        self.pinout_x = None
+        self.x_pinout = None
 
         #: nidaqmx.Task: The analog output task for the x galvo.
         self.task_x = None
 
         #: float: The volts per micron for the x galvo.
-        self.volts_per_micron_x = None
+        self.x_scaling_factor = None
 
         #: str: The pinout for the y galvo.
-        self.pinout_y = None
+        self.y_pinout = None
 
         #: nidaqmx.Task: The analog output task for the y galvo.
         self.task_y = None
 
         #: float: The volts per micron for the y galvo.
-        self.volts_per_micron_y = None
+        self.y_scaling_factor = None
 
         #: int: The duration in milliseconds of the photoactivation.
         self.duration = None
@@ -120,73 +133,54 @@ class Photoactivation:
         self.n_samples = None
 
         #: float: The percentage laser power.
-        self.percent_laser_power = None
+        self.laser_power = None
+
+        #: SharedDict: The configuration for the feature.
+        self.config = self.model.configuration["experiment"]["Photoactivation"]
 
     def get_photoactivation_parameters(self):
         """Get the photoactivation parameters from the configuration."""
-        microscope_name = self.model.active_microscope.name
 
         # Galvo and laser switching pinouts.
-        self.pinout_x = self.model.configuration["experiment"]["Photoactivation"][
-            "x_pinout"
-        ]
-        self.pinout_y = self.model.configuration["experiment"]["Photoactivation"][
-            "y_pinout"
-        ]
-        self.switching_port = self.model.configuration["experiment"]["Photoactivation"][
-            "laser_switch"
-        ]
+        self.x_pinout = self.config["x_pinout"]
+        self.y_pinout = self.config["y_pinout"]
+        self.laser_port_switcher = self.config["laser_port_switcher"]
+        self.y_scaling_factor = self.config["y_scaling_factor"]
+        self.x_scaling_factor = self.config["x_scaling_factor"]
+        self.laser_power = self.config["laser_power"]
+        self.duration = self.config["duration"]
+        self.pattern = self.config["pattern"]
+        self.wavelength = self.config["wavelength"]
+        self.location_x = self.config["location_x"]
+        self.location_y = self.config["location_y"]
+        self.photoactivation_trigger = self.config["photoactivation_trigger"]
+        self.photoactivation_source = self.config["photoactivation_source"]
 
-        # Trigger source for the DAQ.
-        self.trigger_source = self.model.configuration["configuration"]["microscopes"][
-            microscope_name
-        ]["daq"]["trigger_source"]
+    def prepare_laser_switching_task(self):
+        """Prepare the laser switching task.
 
-        # Duration of the photoactivation.
-        self.duration = self.model.configuration["experiment"]["Photoactivation"][
-            "duration"
-        ]
-
-        # Stimulation laser wavelength and power.
-        self.laser_wavelength = self.model.configuration["experiment"][
-            "Photoactivation"
-        ]["laser"]
-        self.percent_laser_power = self.model.configuration["experiment"][
-            "Photoactivation"
-        ]["power"]
-
-        # Stimulation pattern.
-        self.stimulation_type = self.model.configuration["experiment"][
-            "Photoactivation"
-        ]["pattern"]
-
-        # Stimulation position.
-        self.location_x = self.model.configuration["experiment"]["Photoactivation"][
-            "location_x"
-        ]
-        self.location_y = self.model.configuration["experiment"]["Photoactivation"][
-            "location_y"
-        ]
-
-    def trigger_photoactivation_laser(self):
-        """Turn on the laser for photoactivation.
-
-        Sets the laser power and turns on the laser.
+        If the laser switching task is not already created, create it.
         """
-        self.model.active_microscope.lasers[str(self.laser_wavelength)].set_power(
-            self.percent_laser_power
-        )
+        if self.model.active_microscope.daq.laser_switching_task is None:
+            self.switch_task = nidaqmx.Task()
+            self.switch_task.ao_channels.do_channels.add_do_chan(
+                self.laser_port_switcher,
+                line_grouping=nidaqmx.constants.LineGrouping.CHAN_FOR_ALL_LINES,
+            )
+        else:
+            self.switch_task = self.model.active_microscope.daq.laser_switching_task
+        self.switch_task.write(True, auto_start=True)
 
-        self.model.active_microscope.lasers[str(self.laser_wavelength)].turn_on()
-
-    def perform_photoactivation(self):
-        """Trigger the galvo tasks for the photoactivation feature."""
-        self.model.active_microscope.daq.master_trigger_task.write(
-            [False, True, True, True, False], auto_start=True
-        )
-        for task in [self.task_x, self.task_y]:
-            task.wait_until_done()
-            task.stop()
+    def prepare_photoactivation_trigger_task(self):
+        """Prepare the photoactivation trigger."""
+        if self.photoactivation_trigger_task is None:
+            self.photoactivation_trigger_task = nidaqmx.Task(
+                new_task_name="Photoactivation Trigger"
+            )
+            self.photoactivation_trigger_task.do_channels.add_do_chan(
+                self.photoactivation_trigger,
+                line_grouping=nidaqmx.constants.LineGrouping.CHAN_FOR_ALL_LINES,
+            )
 
     def prepare_galvo_tasks(self):
         """Prepare the galvo tasks for the photoactivation feature.
@@ -211,64 +205,44 @@ class Photoactivation:
         # Create analog output tasks for the x and y galvos.
         if self.task_x is None:
             self.task_x = nidaqmx.Task(new_task_name="X-Galvo - Photoactivation")
-            self.task_x.ao_channels.add_ao_voltage_chan(self.pinout_x)
+            self.task_x.ao_channels.add_ao_voltage_chan(self.x_pinout)
             self.task_x.timing.cfg_samp_clk_timing(
                 rate=sample_rate,
                 sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
                 samps_per_chan=self.n_samples,
             )
             self.task_x.triggers.start_trigger.cfg_dig_edge_start_trig(
-                self.trigger_source
+                self.photoactivation_source
             )
             self.task_x.register_done_event(None)
 
         if self.task_y is None:
             self.task_y = nidaqmx.Task(new_task_name="Y-Galvo - Photoactivation")
-            self.task_y.ao_channels.add_ao_voltage_chan(self.pinout_y)
+            self.task_y.ao_channels.add_ao_voltage_chan(self.y_pinout)
             self.task_y.timing.cfg_samp_clk_timing(
                 rate=sample_rate,
                 sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
                 samps_per_chan=self.n_samples,
             )
             self.task_y.triggers.start_trigger.cfg_dig_edge_start_trig(
-                self.trigger_source
+                self.photoactivation_source
             )
             self.task_y.register_done_event(None)
 
-        x_voltage_offset = self.location_x * self.volts_per_micron_x
-        y_voltage_offset = self.location_y * self.volts_per_micron_y
+        # Location values are in microns from center of the image.
+        x_voltage_offset = self.location_x * self.x_scaling_factor
+        y_voltage_offset = self.location_y * self.y_scaling_factor
 
-        if self.stimulation_type == "point":
+        if self.pattern == "point":
             x_waveform = [x_voltage_offset] * self.n_samples
             y_waveform = [y_voltage_offset] * self.n_samples
-        elif self.stimulation_type == "square":
+        elif self.pattern == "square":
             raise NotImplementedError
-        elif self.stimulation_type == "circle":
+        elif self.pattern == "circle":
             raise NotImplementedError
 
         self.task_x.write(x_waveform)
         self.task_y.write(y_waveform)
-
-    def prepare_laser_switching_task(self):
-        """Prepare the laser switching task.
-
-        If the laser switching task is not already created, create it.
-        """
-        if self.model.active_microscope.daq.laser_switching_task is None:
-            self.switch_task = nidaqmx.Task()
-            self.switch_task.ao_channels.do_channels.add_do_chan(
-                self.switching_port,
-                line_grouping=nidaqmx.constants.LineGrouping.CHAN_FOR_ALL_LINES,
-            )
-        else:
-            self.switch_task = self.model.active_microscope.daq.laser_switching_task
-        self.switch_task.write(True, auto_start=True)
-
-    def cleanup_laser_switching_task(self):
-        """Cleanup the laser switching task."""
-        self.switch_task.write(False, auto_start=True)
-        if self.model.active_microscope.daq.laser_switching_task is None:
-            self.switch_task.close()
 
     def pre_func_signal(self):
         """Prepare the signal thread to run this feature.
@@ -279,38 +253,48 @@ class Photoactivation:
         """
         self.get_photoactivation_parameters()
         self.prepare_laser_switching_task()
+        self.prepare_photoactivation_trigger_task()
         self.prepare_galvo_tasks()
-        return True
+
+    def trigger_photoactivation_laser(self):
+        """Turn on the laser for photoactivation.
+
+        Sets the laser power and turns on the laser.
+        """
+        self.model.active_microscope.lasers[str(self.wavelength)].set_power(
+            self.laser_power
+        )
+        self.model.active_microscope.lasers[str(self.wavelength)].turn_on()
+
+    def perform_photoactivation(self):
+        """Trigger the galvo tasks for the photoactivation feature.
+
+        Only trigger the galvos and the laser. Do not trigger any other hardware.
+
+        Should use a different trigger source than the master trigger.
+        """
+        self.photoactivation_trigger_task.write(
+            [False, True, True, True, False], auto_start=True
+        )
+        for task in [self.task_x, self.task_y]:
+            task.wait_until_done()
+            task.stop()
+            task.close()
 
     def in_func_signal(self):
-        """Turn on the lasers and perform the photoactivation."""
-
+        """Turn on the lasers, perform the photoactivation, turn off the lasers."""
         self.trigger_photoactivation_laser()
         self.perform_photoactivation()
-        return True
+        self.model.active_microscope.lasers[str(self.wavelength)].turn_off()
 
-    def end_func_signal(self):
-        """Turn off the lasers"""
-
-        self.model.active_microscope.lasers[str(self.laser_wavelength)].turn_off()
-        return True
+    def cleanup_tasks(self):
+        """Cleanup the laser switching task."""
+        self.switch_task.write(False, auto_start=True)
+        self.switch_task.stop()
+        self.switch_task.close()
+        self.photoactivation_trigger_task.stop()
+        self.photoactivation_trigger_task.close()
 
     def cleanup_func_signal(self):
-        """Cleanup"""
-        self.cleanup_laser_switching_task()
-
-    def pre_func_data(self):
-        """Prepare data thread to run this feature"""
-        pass
-
-    def in_func_data(self, frame_ids):
-        """Deal with images"""
-        pass
-
-    def end_func_data(self):
-        """Decide if this feature ends"""
-        pass
-
-    def cleanup_func_data(self):
-        """Cleanup"""
-        pass
+        """Cleanup. Called after the features are done, or if there is an error."""
+        self.cleanup_tasks()

@@ -77,6 +77,12 @@ class PhotoactivationController:
         #: str: The pinout for the laser switch
         self.switch = None
 
+        #: str: The pinout for the photoactivation trigger
+        self.photoactivation_trigger = None
+
+        #: str: The pinout for the photoactivation source
+        self.photoactivation_source = None
+
         #: float: The power of the laser
         self.laser_power = None
 
@@ -105,12 +111,14 @@ class PhotoactivationController:
     def get_default_parameters(self):
         """Get the default parameters for the plugin
 
-        TODO: Retrieve the values from the plugin configuration file.
+        TODO: Retrieve the values from the configuration file.
 
         """
-        # Galvo pinouts
+        # Pinouts
         self.pinout_x = "PCIE6738/ao0"
         self.pinout_y = "PCIE6738/ao1"
+        self.photoactivation_trigger = "PCIE6738/port0/line0"
+        self.photoactivation_source = "PCIE6738/port0/line1"
 
         # Galvo volts per micron scaling factors.
         self.x_scaling_factor = 0.05
@@ -162,6 +170,8 @@ class PhotoactivationController:
         self.config["x_pinout"] = self.pinout_x
         self.config["y_pinout"] = self.pinout_y
         self.config["laser_port_switcher"] = self.switch
+        self.config["photoactivation_trigger"] = self.photoactivation_trigger
+        self.config["photoactivation_source"] = self.photoactivation_source
 
         # Galvo volts per micron scaling factors.
         self.config["y_scaling_factor"] = self.y_scaling_factor
