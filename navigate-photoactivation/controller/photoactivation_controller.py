@@ -49,9 +49,6 @@ class PhotoactivationController:
         #: dict: The variables from the view
         self.variables = self.view.get_variables()
 
-        #: dict: The buttons from the view
-        self.buttons = self.view.get_buttons()
-
         #: dict: The widgets from the view
         self.widgets = self.view.get_widgets()
 
@@ -59,21 +56,17 @@ class PhotoactivationController:
             "MicroscopeState"
         ]["microscope_name"]
 
-        self.configuration = self.parent_controller.configuration["configuration"][
-            "microscopes"
-        ]
-
         #: float: The offset in the x direction
-        self.location_x = 0
+        self.location_x = None
 
         #: float: The offset in the y direction
-        self.location_y = 0
+        self.location_y = None
 
         #: float: The volts per micron for the x galvo
-        self.x_scaling_factor = 1
+        self.x_scaling_factor = None
 
         #: float: The volts per micron for the y galvo
-        self.y_scaling_factor = 1
+        self.y_scaling_factor = None
 
         #: str: The pinout for the x galvo
         self.pinout_x = None
@@ -84,111 +77,167 @@ class PhotoactivationController:
         #: str: The pinout for the laser switch
         self.switch = None
 
+        #: float: The power of the laser
+        self.laser_power = None
+
+        #: str: The laser wavelength
+        self.laser = None
+
+        #: int: The duration of the photoactivation
+        self.duration = None
+
+        #: str: The pattern of the photoactivation
+        self.pattern = None
+
         # Default location for communicating with the plugin in the model.
         self.parent_controller.configuration["experiment"]["Photoactivation"] = {}
+        self.config = self.parent_controller.configuration["experiment"][
+            "Photoactivation"
+        ]
 
-        self.get_default_configuration()
+        self.get_default_parameters()
         self.populate_widgets()
+        self.initialize_shared_configuration()
+        self.set_widget_state()
         self.set_menu_entries()
         self.configure_widget_events()
 
-    def get_default_configuration(self):
-        """Get the default configuration for the plugin"""
-        # TODO: Retrieve the values from the plugin configuration file.
+    def get_default_parameters(self):
+        """Get the default parameters for the plugin
+
+        TODO: Retrieve the values from the plugin configuration file.
+
+        """
+        # Galvo pinouts
         self.pinout_x = "PCIE6738/ao0"
         self.pinout_y = "PCIE6738/ao1"
 
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "x_pinout"
-        ] = self.pinout_x
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "y_pinout"
-        ] = self.pinout_y
-        self.switch = self.configuration[self.microscope_name]["daq"][
-            "laser_port_switcher"
-        ]
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "laser_switch"
-        ] = self.switch
-
-        self.y_scaling_factor = 0.05
+        # Galvo volts per micron scaling factors.
         self.x_scaling_factor = 0.05
+        self.y_scaling_factor = 0.05
 
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "y_scaling_factor"
-        ] = self.y_scaling_factor
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "x_scaling_factor"
-        ] = self.x_scaling_factor
+        # Default laser power
+        self.laser_power = 10
 
-    def update_configuration(self, *args):
-        """Retrieve values from GUI and update the experiment configuration.
+        # Default photoactivation duration
+        self.duration = 100
 
-        This function is called everytime the user changes a value in the GUI.
-        """
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "laser"
-        ] = int(self.widgets["Laser"].get().rstrip("nm"))
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "power"
-        ] = float(self.widgets["Power"].get())
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "duration"
-        ] = int(self.widgets["Duration (ms)"].get())
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "pattern"
-        ] = str(self.widgets["Pattern"].get())
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "location_x"
-        ] = float(self.widgets["Photoactivation Offset X"].get())
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "location_y"
-        ] = float(self.widgets["Photoactivation Offset Y"].get())
+        # Default pattern of photoactivation
+        self.widgets["Pattern"]["values"] = ["Point", "Square", "Circle"]
+        self.pattern = "Point"
+
+        # Laser wavelengths - Default to first value.
+        setting_dict = self.parent_controller.configuration_controller.channels_info
+        self.widgets["Laser"]["values"] = setting_dict["laser"]
+        self.laser = setting_dict["laser"][0]
+
+        # Laser switching port
+        self.switch = self.parent_controller.configuration["configuration"][
+            "microscopes"
+        ][self.microscope_name]["daq"]["laser_port_switcher"]
+
+        # Default location for photoactivation
+        self.location_y = 0
+        self.location_x = 0
 
     def populate_widgets(self):
         """Populate the default values for the widgets"""
-        # Laser Wavelengths - "Laser"
-        setting_dict = self.parent_controller.configuration_controller.channels_info
-        self.widgets["Laser"]["values"] = setting_dict["laser"]
-        self.widgets["Laser"].set(setting_dict["laser"][0])
-
-        # Laser Switch - "Pinout - Laser Switch"
+        self.widgets["Laser"].set(self.laser)
         self.widgets["Pinout - Laser Switch"].set(self.switch)
-
-        # Laser Power - "Power"
-        self.widgets["Power"].set(10)
-
-        # Duration (ms) - "Duration"
-        self.widgets["Duration (ms)"].set(10)
-
-        # Pattern - "Pattern"
-        self.widgets["Pattern"]["values"] = ["Point", "Square", "Circle"]
-        self.widgets["Pattern"].set("Point")
-
-        # Pin outs for Galvos
+        self.widgets["Power"].set(self.laser_power)
+        self.widgets["Duration (ms)"].set(self.duration)
+        self.widgets["Pattern"].set(self.pattern)
         self.widgets["Pinout - X Galvo"].set(self.pinout_x)
         self.widgets["Pinout - Y Galvo"].set(self.pinout_y)
-
-        # Volts per Micron
         self.widgets["Volts per Micron - X"].set(self.x_scaling_factor)
         self.widgets["Volts per Micron - Y"].set(self.y_scaling_factor)
-
-        # Photoactivation Offset
         self.widgets["Photoactivation Offset X"].set(self.location_x)
         self.widgets["Photoactivation Offset Y"].set(self.location_y)
 
-    def configure_widget_events(self):
-        """Add the event traces to the widgets."""
-        self.widgets["Laser"].bind("<FocusOut>", self.update_configuration)
-        self.widgets["Power"].bind("<FocusOut>", self.update_configuration)
-        self.widgets["Duration (ms)"].bind("<FocusOut>", self.update_configuration)
-        self.widgets["Pattern"].bind("<FocusOut>", self.update_configuration)
+    def initialize_shared_configuration(self):
+        """Initialize the shared configuration with the default values from the
+        plugin"""
+
+        # Pinouts
+        self.config["x_pinout"] = self.pinout_x
+        self.config["y_pinout"] = self.pinout_y
+        self.config["laser_port_switcher"] = self.switch
+
+        # Galvo volts per micron scaling factors.
+        self.config["y_scaling_factor"] = self.y_scaling_factor
+        self.config["x_scaling_factor"] = self.x_scaling_factor
+
+        # Default laser power
+        self.config["laser_power"] = self.laser_power
+
+        # Default photoactivation duration
+        self.config["duration"] = self.duration
+
+        # Default pattern of photoactivation
+        self.config["pattern"] = self.pattern
+
+        # Laser wavelengths - Default to first value.
+        self.config["wavelength"] = self.laser
+
+        # Laser switching port
+        self.config["laser_port_switcher"] = self.switch
+
+        # Default location for photoactivation
+        self.config["location_x"] = self.location_x
+        self.config["location_y"] = self.location_y
+
+    def set_widget_state(self):
+        """Set the state of the widgets in the view.
+
+        Active widgets include the laser, power, pattern, and duration.
+        Inactive widgets include the pinouts, scaling factors, and offsets."""
+        for key in [
+            "Pinout - X Galvo",
+            "Pinout - Y Galvo",
+            "Pinout - Laser Switch",
+            "Photoactivation Offset X",
+            "Photoactivation Offset Y",
+            "Volts per Micron - X",
+            "Volts per Micron - Y",
+        ]:
+            self.widgets[key].configure(state="disabled")
+
+        self.widgets["Laser"].configure(state="readonly")
+        self.widgets["Pattern"].configure(state="readonly")
+        self.widgets["Power"].configure(state="normal", from_=0, to=100, increment=1)
+        self.widgets["Duration (ms)"].configure(
+            state="normal", from_=0, to=10000, increment=1
+        )
 
     def set_menu_entries(self):
         """Set the menu entries for the plugin in the view"""
         self.parent_controller.camera_view_controller.menu.add_command(
             label="Photoactivate Here", command=self.mark_position
         )
+
+    def configure_widget_events(self):
+        """Add the event traces to the widgets."""
+        self.widgets["Laser"].bind("<<ComboboxSelected>>", self.update_configuration)
+        self.widgets["Pattern"].bind("<<ComboboxSelected>>", self.update_configuration)
+        self.widgets["Power"].bind("<FocusOut>", self.update_configuration)
+        self.widgets["Duration (ms)"].bind("<FocusOut>", self.update_configuration)
+
+    def update_configuration(self, *args):
+        """Retrieve values from GUI and update the experiment configuration.
+
+        This function is called everytime the user changes a value in the GUI.
+        """
+        self.config["wavelength"] = int(self.widgets["Laser"].get().rstrip("nm"))
+        self.config["laser_power"] = float(self.widgets["Power"].get())
+        self.config["duration"] = int(self.widgets["Duration (ms)"].get())
+        self.config["pattern"] = str(self.widgets["Pattern"].get())
+        self.config["location_x"] = float(
+            self.widgets["Photoactivation Offset X"].get()
+        )
+        self.config["location_y"] = float(
+            self.widgets["Photoactivation Offset Y"].get()
+        )
+        print(self.config)
 
     def mark_position(self, *args):
         """Mark the current position of the microscope"""
@@ -202,9 +251,5 @@ class PhotoactivationController:
         self.widgets["Photoactivation Offset Y"].set(self.location_y)
 
         # Update the offset values in the configuration
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "location_x"
-        ] = self.location_x
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "location_y"
-        ] = self.location_y
+        self.config["location_x"] = self.location_x
+        self.config["location_y"] = self.location_y

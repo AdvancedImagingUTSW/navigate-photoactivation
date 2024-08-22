@@ -37,7 +37,6 @@ from tkinter import ttk
 # Third Party Imports
 
 # Local Imports
-from navigate.view.custom_widgets.hover import HoverTkButton
 from navigate.view.custom_widgets.validation import ValidatedSpinbox
 from navigate.view.custom_widgets.validation import ValidatedEntry
 
@@ -69,9 +68,6 @@ class PhotoactivationFrame(ttk.Frame):
         #: dict: Dictionary of the widgets in the frame
         self.inputs = {}
 
-        #: dict: Dictionary of the buttons in the frame
-        self.buttons = {}
-
         #: dict: Dictionary of the variables for the widgets in the frame
         self.variables = {}
 
@@ -101,29 +97,11 @@ class PhotoactivationFrame(ttk.Frame):
             ttk.Label(self, text=label).grid(
                 row=counter, column=0, pady=3, padx=5, sticky=tk.NW
             )
-
             self.variables[key] = tk.StringVar()
             self.inputs[key] = widget(self, textvariable=self.variables[key], width=20)
             self.inputs[key].grid(row=counter, column=1, pady=3, padx=5)
             counter += 1
 
-        for key in [
-            "Pinout - X Galvo",
-            "Pinout - Y Galvo",
-            "Pinout - Laser Switch",
-            "Photoactivation Offset X",
-            "Photoactivation Offset Y",
-        ]:
-            self.inputs[key].configure(state="disabled")
-
-        self.inputs["Laser"].configure(state="readonly")
-
-        # Execute Button
-        self.buttons["execute"] = HoverTkButton(self, text="START", borderwidth=0)
-        self.buttons["execute"].grid(row=counter, column=1, sticky="N", padx=6)
-        self.buttons["execute"].hover.setdescription("Perform Photoactivation")
-
-    # Getters
     def get_variables(self):
         """Returns a dictionary of the variables for the widgets in this frame.
 
@@ -147,15 +125,3 @@ class PhotoactivationFrame(ttk.Frame):
             Dictionary of the widgets in this frame.
         """
         return self.inputs
-
-    def get_buttons(self):
-        """Returns a dictionary of the buttons in this frame.
-
-        The key is the button name, value is the Button class that has all the data.
-
-        Returns
-        -------
-        self.buttons : dict
-            Dictionary of the buttons in this frame.
-        """
-        return self.buttons
