@@ -30,11 +30,13 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 # Standard Library Imports
+import traceback
 
 # Third Party Imports
 import nidaqmx
 import nidaqmx.constants
 import nidaqmx.task
+import numpy as np
 
 # Local Imports
 
@@ -140,7 +142,6 @@ class Photoactivation:
 
     def get_photoactivation_parameters(self):
         """Get the photoactivation parameters from the configuration."""
-
         # Galvo and laser switching pinouts.
         self.x_pinout = self.config["x_pinout"]
         self.y_pinout = self.config["y_pinout"]
@@ -157,13 +158,18 @@ class Photoactivation:
         self.photoactivation_source = self.config["photoactivation_source"]
 
     def prepare_laser_switching_task(self):
-        """Prepare the laser switching task.
+        """Prepare the laser switching task. """
+        if not hasattr(self.model.active_microscope.daq, 'laser_switching_task'):
+            create_task = True
+        else:
+            if self.model.active_microscope.daq.laser_switching_task is None:
+                create_task = True
+            else:
+                create_task = False
 
-        If the laser switching task is not already created, create it.
-        """
-        if self.model.active_microscope.daq.laser_switching_task is None:
-            self.switch_task = nidaqmx.Task()
-            self.switch_task.ao_channels.do_channels.add_do_chan(
+        if create_task:
+            self.switch_task = nidaqmx.Task(new_task_name='Laser Switching Task')
+            self.switch_task.do_channels.add_do_chan(
                 self.laser_port_switcher,
                 line_grouping=nidaqmx.constants.LineGrouping.CHAN_FOR_ALL_LINES,
             )
@@ -214,7 +220,7 @@ class Photoactivation:
             self.task_x.triggers.start_trigger.cfg_dig_edge_start_trig(
                 self.photoactivation_source
             )
-            self.task_x.register_done_event(None)
+            # self.task_x.register_done_event(None)
 
         if self.task_y is None:
             self.task_y = nidaqmx.Task(new_task_name="Y-Galvo - Photoactivation")
@@ -227,22 +233,34 @@ class Photoactivation:
             self.task_y.triggers.start_trigger.cfg_dig_edge_start_trig(
                 self.photoactivation_source
             )
-            self.task_y.register_done_event(None)
+            # self.task_y.register_done_event(None)
 
         # Location values are in microns from center of the image.
         x_voltage_offset = self.location_x * self.x_scaling_factor
         y_voltage_offset = self.location_y * self.y_scaling_factor
 
-        if self.pattern == "point":
-            x_waveform = [x_voltage_offset] * self.n_samples
-            y_waveform = [y_voltage_offset] * self.n_samples
+        # TODO: Should make sure that the values are between the min and max voltage.
+
+        if self.pattern == "Point":
+            x_waveform = np.hstack([x_voltage_offset] * self.n_samples)
+            y_waveform = np.hstack([y_voltage_offset] * self.n_samples)
         elif self.pattern == "square":
             raise NotImplementedError
         elif self.pattern == "circle":
             raise NotImplementedError
 
-        self.task_x.write(x_waveform)
-        self.task_y.write(y_waveform)
+        try:
+            self.task_x.write(x_waveform)
+        except Exception:
+            print("Warning, could not write waveform to X Galvo")
+            traceback.format_exc()
+            print(f"{traceback.format_exc()}")
+
+        try:
+            self.task_y.write(y_waveform)
+        except Exception:
+            print("Warning, could not write waveform to Y Galvo")
+            print(f"{traceback.format_exc()}")
 
     def pre_func_signal(self):
         """Prepare the signal thread to run this feature.
@@ -251,10 +269,12 @@ class Photoactivation:
         offset necessary to move the galvos to that position in X and Y, trigger the
         laser switching galvo and the image flipping mirror.
         """
+        print("pre_func_signal starts")
         self.get_photoactivation_parameters()
         self.prepare_laser_switching_task()
         self.prepare_photoactivation_trigger_task()
         self.prepare_galvo_tasks()
+        print("pre_func_signal concludes")
 
     def trigger_photoactivation_laser(self):
         """Turn on the laser for photoactivation.
@@ -265,6 +285,7 @@ class Photoactivation:
             self.laser_power
         )
         self.model.active_microscope.lasers[str(self.wavelength)].turn_on()
+        print("laser on")
 
     def perform_photoactivation(self):
         """Trigger the galvo tasks for the photoactivation feature.
@@ -280,6 +301,7 @@ class Photoactivation:
             task.wait_until_done()
             task.stop()
             task.close()
+        print("photoactivation complete")
 
     def in_func_signal(self):
         """Turn on the lasers, perform the photoactivation, turn off the lasers."""
