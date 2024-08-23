@@ -96,13 +96,12 @@ class PhotoactivationController:
         self.pattern = None
 
         # Default location for communicating with the plugin in the model.
-        self.parent_controller.configuration["experiment"]["Photoactivation"] = {}
         self.get_default_parameters()
         self.populate_widgets()
-        self.initialize_shared_configuration()
         self.set_widget_state()
         self.set_menu_entries()
         self.configure_widget_events()
+        self.update_configuration()
 
     def get_default_parameters(self):
         """Get the default parameters for the plugin
@@ -110,16 +109,19 @@ class PhotoactivationController:
         TODO: Retrieve the values from the configuration file.
 
         Must be compatible with other triggers
-        master_trigger_out_line: PCIE6738/port0/line1
+        laser_port_switcher:        PCIE6738/port0/line0
+        master_trigger_out_line:    PCIE6738/port0/line1
+        photoactivation trigger     PCIE6738/port0/line0
+        405:                        PCIE6738/port1/line1
+
         trigger_source: /PCIE6738/PFI0
-        laser_port_switcher: PCIE6738/port0/line0
 
         """
         # Pinouts
         self.pinout_x = "PCIE6738/ao0"
         self.pinout_y = "PCIE6738/ao1"
-        self.photoactivation_trigger = "PCIE6738/port1/line0"  # 2
-        self.photoactivation_source = "/PCIE6738/PFI2"  # 5
+        self.photoactivation_trigger = "PCIE6738/port0/line0"
+        self.photoactivation_source = "/PCIE6738/PFI5"
 
         # Galvo volts per micron scaling factors.
         self.x_scaling_factor = 0.05
@@ -163,19 +165,6 @@ class PhotoactivationController:
         self.widgets["Photoactivation Offset X"].set(self.location_x)
         self.widgets["Photoactivation Offset Y"].set(self.location_y)
 
-    def initialize_shared_configuration(self):
-        """Initialize the shared configuration with the default values from the
-        plugin"""
-
-        config = {"x_pinout": self.pinout_x, "y_pinout": self.pinout_y, "laser_port_switcher": self.switch,
-                  "photoactivation_trigger": self.photoactivation_trigger,
-                  "photoactivation_source": self.photoactivation_source, "y_scaling_factor": self.y_scaling_factor,
-                  "x_scaling_factor": self.x_scaling_factor, "laser_power": self.laser_power, "duration": self.duration,
-                  "pattern": self.pattern, "wavelength": self.laser, "location_x": self.location_x,
-                  "location_y": self.location_y}
-
-        self.parent_controller.configuration["experiment"]["Photoactivation"] = config
-
     def set_widget_state(self):
         """Set the state of the widgets in the view.
 
@@ -217,17 +206,30 @@ class PhotoactivationController:
 
         This function is called everytime the user changes a value in the GUI.
         """
-        config = {
-            "wavelength": int(self.widgets["Laser"].get().rstrip("nm")),
-            "laser_power": float(self.widgets["Power"].get()),
-            "duration": int(self.widgets["Duration (ms)"].get()),
-            "pattern": str(self.widgets["Pattern"].get()),
-            "location_x": float(self.widgets["Photoactivation Offset X"].get()),
-            "location_y": float(self.widgets["Photoactivation Offset Y"].get())
-        }
+        self.laser = int(self.widgets["Laser"].get().rstrip("nm"))
+        self.laser_power = float(self.widgets["Power"].get())
+        self.duration = int(self.widgets["Duration (ms)"].get())
+        self.pattern = str(self.widgets["Pattern"].get())
+        self.location_x = float(self.widgets["Photoactivation Offset X"].get())
+        self.location_y = float(self.widgets["Photoactivation Offset Y"].get())
 
-        for k, v in config:
-            self.parent_controller.configuration["experiment"]["Photoactivation"][k] = v
+        # Update the Proxy Dict
+        # self.parent_controller.configuration["experiment"]["Photoactivation"] = {}
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["wavelength"] = self.laser
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["laser_power"] = self.laser_power
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["duration"] = self.duration
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["pattern"] = self.pattern
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["location_x"] = self.location_x
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["location_y"] = self.location_y
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["x_pinout"] = self.pinout_x
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["y_pinout"] = self.pinout_y
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["laser_port_switcher"] = self.switch
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["photoactivation_trigger"] = self.photoactivation_trigger
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["photoactivation_source"] = self.photoactivation_source
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["y_scaling_factor"] = self.y_scaling_factor
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["x_scaling_factor"] = self.x_scaling_factor
+
+        print("updated configuration")
 
     def mark_position(self, *args):
         """Mark the current position of the microscope"""
@@ -240,8 +242,7 @@ class PhotoactivationController:
         self.widgets["Photoactivation Offset X"].set(self.location_x)
         self.widgets["Photoactivation Offset Y"].set(self.location_y)
 
-        # Update the offset values in the configuration
-        config = {"location_x": self.location_x, "location_y": self.location_y}
-
-        for k, v in config:
-            self.parent_controller.configuration["experiment"]["Photoactivation"][k] = v
+        # Update the proxy dictionary.
+        # self.parent_controller.configuration["experiment"]["Photoactivation"]["location_x"] = self.location_x
+        # self.parent_controller.configuration["experiment"]["Photoactivation"]["location_y"] = self.location_y
+        self.update_configuration()
