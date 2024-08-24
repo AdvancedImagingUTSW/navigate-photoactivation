@@ -107,15 +107,6 @@ class PhotoactivationController:
         """Get the default parameters for the plugin
 
         TODO: Retrieve the values from the configuration file.
-
-        Must be compatible with other triggers
-        laser_port_switcher:        PCIE6738/port0/line0
-        master_trigger_out_line:    PCIE6738/port0/line1
-        photoactivation trigger     PCIE6738/port0/line0
-        405:                        PCIE6738/port1/line1
-
-        trigger_source: /PCIE6738/PFI0
-
         """
         # Pinouts
         self.pinout_x = "PCIE6738/ao0"

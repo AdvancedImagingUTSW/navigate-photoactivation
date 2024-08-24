@@ -31,6 +31,7 @@
 
 # Standard Library Imports
 import traceback
+import time
 
 # Third Party Imports
 import nidaqmx
@@ -150,13 +151,9 @@ class Photoactivation:
         self.location_y = self.model.configuration["experiment"]["Photoactivation"]["location_y"]
         self.photoactivation_trigger = self.model.configuration["experiment"]["Photoactivation"]["photoactivation_trigger"]
         self.photoactivation_source = self.model.configuration["experiment"]["Photoactivation"]["photoactivation_source"]
-        print(dict(self.model.configuration["experiment"]["Photoactivation"]))
 
     def prepare_laser_switching_task(self):
-        """Prepare the laser switching task.
-
-        Currently PCIE6738/port0/line0
-        """
+        """Prepare the laser switching task."""
         if not hasattr(self.model.active_microscope.daq, 'laser_switching_task'):
             create_task = True
         else:
@@ -174,12 +171,10 @@ class Photoactivation:
         else:
             self.switch_task = self.model.active_microscope.daq.laser_switching_task
         self.switch_task.write(True, auto_start=True)
+        time.sleep(0.1)
 
     def prepare_photoactivation_trigger_task(self):
-        """Prepare the photoactivation trigger.
-
-        Currently PCIE6738/port1/line0
-        """
+        """Prepare the photoactivation trigger."""
         if self.photoactivation_trigger_task is None:
             self.photoactivation_trigger_task = nidaqmx.Task(
                 new_task_name="Photoactivation Trigger"
@@ -239,19 +234,9 @@ class Photoactivation:
 
         # 1 channel worth of tasks.
         self.galvo_task.write(waveforms)
-
-        print("Setting external triggers")
-        try:
-            self.galvo_task.triggers.start_trigger.cfg_dig_edge_start_trig(
-                 self.photoactivation_source
-            )
-            self.galvo_task.triggers.start_trigger.retriggerable = False
-        except Exception as e:
-            print(f"{e}")
-            traceback.format_exc()
-
+        self.galvo_task.triggers.start_trigger.cfg_dig_edge_start_trig(self.photoactivation_source)
+        self.galvo_task.triggers.start_trigger.retriggerable = False
         self.galvo_task.start()
-        print("External trigger set")
 
     def pre_func_signal(self):
         """Prepare the signal thread to run this feature.
@@ -260,6 +245,7 @@ class Photoactivation:
         offset necessary to move the galvos to that position in X and Y, trigger the
         laser switching galvo and the image flipping mirror.
         """
+        self.model.active_microscope.daq.stop_acquisition()
         self.get_photoactivation_parameters()
         self.prepare_laser_switching_task()
         self.prepare_photoactivation_trigger_task()
@@ -270,46 +256,36 @@ class Photoactivation:
 
         Sets the laser power and turns on the laser.
         """
-        self.model.active_microscope.lasers[str(self.wavelength).rstrip("nm")].set_power(
-            self.laser_power
-        )
+        self.model.active_microscope.lasers[str(self.wavelength).rstrip("nm")].set_power(self.laser_power)
         self.model.active_microscope.lasers[str(self.wavelength).rstrip("nm")].turn_on()
 
     def perform_photoactivation(self):
         """Trigger the galvo tasks for the photoactivation feature.
 
-        Only trigger the galvos and the laser. Do not trigger any other hardware.
-
-        Should use a different trigger source than the master trigger.
+        Only trigger the galvos and the laser. Do not trigger any other hardware. To do this, we use a separate trigger
+        source than the master trigger.
         """
-        print("Starting perform photoactivation")
-        self.photoactivation_trigger_task.write(
-            [False, True, True, True, False], auto_start=True
-        )
-
+        self.photoactivation_trigger_task.write([False, True, True, True, False], auto_start=True)
         self.galvo_task.wait_until_done()
-        self.galvo_task.stop()
-        self.galvo_task.close()
-        print("photoactivation complete")
 
     def in_func_signal(self):
         """Turn on the lasers, perform the photoactivation, turn off the lasers."""
-        print("in_func_signal started")
         self.trigger_photoactivation_laser()
         self.perform_photoactivation()
         self.model.active_microscope.lasers[str(self.wavelength).rstrip("nm")].turn_off()
-        print("in_func_signal complete")
 
     def cleanup_tasks(self):
-        """Cleanup the laser switching task."""
+        """Cleanup the tasks.
+
+        The laser switching task is left open for subsequent use by navigate.
+        """
+        self.galvo_task.stop()
+        self.galvo_task.close()
         self.switch_task.write(False, auto_start=True)
         self.switch_task.stop()
-        self.switch_task.close()
         self.photoactivation_trigger_task.stop()
         self.photoactivation_trigger_task.close()
-
 
     def cleanup_func_signal(self):
         """Cleanup. Called after the features are done, or if there is an error."""
         self.cleanup_tasks()
-        print("Clean and shiny")
