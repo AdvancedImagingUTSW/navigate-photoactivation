@@ -40,6 +40,13 @@ from model.features.photoactivation import Photoactivation
 
 @FeatureList
 def photoactivation_features():
+    """Return a list of photoactivation features.
+
+    Returns
+    -------
+    list
+        List of photoactivation features.
+    """
     return [
         {"name": Photoactivation},
     ]
