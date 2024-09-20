@@ -135,7 +135,10 @@ class Photoactivation:
         #: float: The percentage laser power.
         self.laser_power = None
 
-    def get_photoactivation_parameters(self):
+        #: bool: The cleanup flag
+        self.cleaned_up_flag = False
+
+    def get_photoactivation_parameters(self) -> None:
         """Get the photoactivation parameters from the configuration."""
         # Galvo and laser switching pinouts.
         self.x_pinout = self.model.configuration["experiment"]["Photoactivation"]["x_pinout"]
@@ -152,39 +155,26 @@ class Photoactivation:
         self.photoactivation_trigger = self.model.configuration["experiment"]["Photoactivation"]["photoactivation_trigger"]
         self.photoactivation_source = self.model.configuration["experiment"]["Photoactivation"]["photoactivation_source"]
 
-    def prepare_laser_switching_task(self):
+    def prepare_laser_switching_task(self) -> None:
         """Prepare the laser switching task."""
-        if not hasattr(self.model.active_microscope.daq, 'laser_switching_task'):
-            create_task = True
-        else:
-            if self.model.active_microscope.daq.laser_switching_task is None:
-                create_task = True
-            else:
-                create_task = False
-
-        if create_task:
-            self.switch_task = nidaqmx.Task(new_task_name='Laser Switching Task')
-            self.switch_task.do_channels.add_do_chan(
-                self.laser_port_switcher,
-                line_grouping=nidaqmx.constants.LineGrouping.CHAN_FOR_ALL_LINES,
-            )
-        else:
-            self.switch_task = self.model.active_microscope.daq.laser_switching_task
+        self.switch_task = nidaqmx.Task(new_task_name='Laser Switching Task')
+        self.switch_task.do_channels.add_do_chan(
+            self.laser_port_switcher,
+            line_grouping=nidaqmx.constants.LineGrouping.CHAN_FOR_ALL_LINES,
+        )
         self.switch_task.write(True, auto_start=True)
-        time.sleep(0.1)
 
-    def prepare_photoactivation_trigger_task(self):
+    def prepare_photoactivation_trigger_task(self) -> None:
         """Prepare the photoactivation trigger."""
-        if self.photoactivation_trigger_task is None:
-            self.photoactivation_trigger_task = nidaqmx.Task(
-                new_task_name="Photoactivation Trigger"
-            )
-            self.photoactivation_trigger_task.do_channels.add_do_chan(
-                self.photoactivation_trigger,
-                line_grouping=nidaqmx.constants.LineGrouping.CHAN_FOR_ALL_LINES,
-            )
+        self.photoactivation_trigger_task = nidaqmx.Task(
+            new_task_name="Photoactivation Trigger"
+        )
+        self.photoactivation_trigger_task.do_channels.add_do_chan(
+            self.photoactivation_trigger,
+            line_grouping=nidaqmx.constants.LineGrouping.CHAN_FOR_ALL_LINES,
+        )
 
-    def prepare_galvo_tasks(self):
+    def prepare_galvo_tasks(self) -> None:
         """Prepare the galvo tasks for the photoactivation feature.
 
         Logic assumes that the tasks are not used for any standard navigate
@@ -205,19 +195,30 @@ class Photoactivation:
         self.n_samples = int(self.duration / 1000 * sample_rate)
 
         # Create analog output tasks for the x and y galvos.
-        if self.galvo_task is None:
-            self.galvo_task = nidaqmx.Task(new_task_name="X & Y Galvo - Photoactivation")
-            self.galvo_task.ao_channels.add_ao_voltage_chan(self.x_pinout)
-            self.galvo_task.ao_channels.add_ao_voltage_chan(self.y_pinout)
-            self.galvo_task.timing.cfg_samp_clk_timing(
-                rate=sample_rate,
-                sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
-                samps_per_chan=self.n_samples,
-            )
+        self.galvo_task = nidaqmx.Task(new_task_name="X & Y Galvo - Photoactivation")
+        self.galvo_task.ao_channels.add_ao_voltage_chan(self.x_pinout)
+        self.galvo_task.ao_channels.add_ao_voltage_chan(self.y_pinout)
+        self.galvo_task.timing.cfg_samp_clk_timing(
+            rate=sample_rate,
+            sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
+            samps_per_chan=self.n_samples,
+        )
 
         # Location values are in microns from center of the image.
-        x_voltage_offset = self.location_x * self.x_scaling_factor
-        y_voltage_offset = self.location_y * self.y_scaling_factor
+        # x_voltage_offset = self.location_x * self.x_scaling_factor
+        # y_voltage_offset = self.location_y * self.y_scaling_factor
+
+        y_voltage_offset = (self.location_x - 424.21) / 0.36
+        x_voltage_offset = -1 * y_voltage_offset
+
+        # millivolts to volts
+        x_voltage_offset = x_voltage_offset / 1000
+        y_voltage_offset = y_voltage_offset / 1000
+
+        print("voltages for x and y:", x_voltage_offset, y_voltage_offset)
+
+        y_voltage_offset = 0
+        x_voltage_offset = 0
 
         # TODO: Should make sure that the values are between the min and max voltage.
 
@@ -238,20 +239,21 @@ class Photoactivation:
         self.galvo_task.triggers.start_trigger.retriggerable = False
         self.galvo_task.start()
 
-    def pre_func_signal(self):
+    def pre_func_signal(self) -> None:
         """Prepare the signal thread to run this feature.
 
         The photoactivation feature will take a position in the image, calculate the
         offset necessary to move the galvos to that position in X and Y, trigger the
         laser switching galvo and the image flipping mirror.
         """
+        self.cleaned_up_flag = False
         self.model.active_microscope.daq.stop_acquisition()
         self.get_photoactivation_parameters()
-        self.prepare_laser_switching_task()
-        self.prepare_photoactivation_trigger_task()
-        self.prepare_galvo_tasks()
+        self.prepare_laser_switching_task() # turn on
+        self.prepare_photoactivation_trigger_task() # prepare the trigger
+        self.prepare_galvo_tasks() # prepare the galvos
 
-    def trigger_photoactivation_laser(self):
+    def trigger_photoactivation_laser(self) -> None:
         """Turn on the laser for photoactivation.
 
         Sets the laser power and turns on the laser.
@@ -259,7 +261,7 @@ class Photoactivation:
         self.model.active_microscope.lasers[str(self.wavelength).rstrip("nm")].set_power(self.laser_power)
         self.model.active_microscope.lasers[str(self.wavelength).rstrip("nm")].turn_on()
 
-    def perform_photoactivation(self):
+    def perform_photoactivation(self) -> None:
         """Trigger the galvo tasks for the photoactivation feature.
 
         Only trigger the galvos and the laser. Do not trigger any other hardware. To do this, we use a separate trigger
@@ -268,24 +270,30 @@ class Photoactivation:
         self.photoactivation_trigger_task.write([False, True, True, True, False], auto_start=True)
         self.galvo_task.wait_until_done()
 
-    def in_func_signal(self):
+    def in_func_signal(self) -> None:
         """Turn on the lasers, perform the photoactivation, turn off the lasers."""
         self.trigger_photoactivation_laser()
         self.perform_photoactivation()
         self.model.active_microscope.lasers[str(self.wavelength).rstrip("nm")].turn_off()
+        self.cleanup_tasks()
 
-    def cleanup_tasks(self):
+    def cleanup_tasks(self) -> None:
         """Cleanup the tasks.
 
         The laser switching task is left open for subsequent use by navigate.
+        Runs if an error happens, or if the entire feature list has run.
         """
+        if self.cleaned_up_flag:
+            return
         self.galvo_task.stop()
         self.galvo_task.close()
         self.switch_task.write(False, auto_start=True)
         self.switch_task.stop()
+        self.switch_task.close()
         self.photoactivation_trigger_task.stop()
         self.photoactivation_trigger_task.close()
+        self.cleaned_up_flag = True
 
-    def cleanup_func_signal(self):
+    def cleanup_func_signal(self) -> None:
         """Cleanup. Called after the features are done, or if there is an error."""
         self.cleanup_tasks()

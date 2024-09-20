@@ -35,7 +35,7 @@
 # Third Party Imports
 
 # Local Imports
-
+from navigate.config import update_config_dict
 
 class PhotoactivationController:
     """Controller for the Photoactivation Plugin"""
@@ -107,6 +107,13 @@ class PhotoactivationController:
         self.pattern = None
 
         # Default location for communicating with the plugin in the model.
+        if "Photoactivation" not in self.parent_controller.configuration["experiment"].keys():
+            update_config_dict(self.parent_controller.manager,
+                               self.parent_controller.configuration["experiment"],
+                               "Photoactivation",
+                               {}
+                               )
+
         self.get_default_parameters()
         self.populate_widgets()
         self.set_widget_state()
@@ -120,10 +127,10 @@ class PhotoactivationController:
         TODO: Retrieve the values from the configuration file.
         """
         # Pinouts
-        self.pinout_x = "PCIE6738/ao0"
-        self.pinout_y = "PCIE6738/ao1"
-        self.photoactivation_trigger = "PCIE6738/port0/line0"
-        self.photoactivation_source = "/PCIE6738/PFI5"
+        self.pinout_x = "TIRF/ao0"
+        self.pinout_y = "TIRF/ao1"
+        self.photoactivation_trigger = "TIRF/port0/line0"
+        self.photoactivation_source = "/TIRF/PFI5"
 
         # Galvo volts per micron scaling factors.
         self.x_scaling_factor = 0.05
@@ -145,9 +152,10 @@ class PhotoactivationController:
         self.laser = setting_dict["laser"][0]
 
         # Laser switching port
-        self.switch = self.parent_controller.configuration["configuration"][
-            "microscopes"
-        ][self.microscope_name]["daq"]["laser_port_switcher"]
+        # self.switch = self.parent_controller.configuration["configuration"][
+        #     "microscopes"
+        # ][self.microscope_name]["daq"]["laser_port_switcher"]
+        self.switch = "TIRF/port1/line2"
 
         # Default location for photoactivation
         self.location_y = 0
@@ -216,13 +224,8 @@ class PhotoactivationController:
         self.location_y = float(self.widgets["Photoactivation Offset Y"].get())
 
         # Update the Proxy Dict
-        # self.parent_controller.configuration["experiment"]["Photoactivation"] = {}
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "wavelength"
-        ] = self.laser
-        self.parent_controller.configuration["experiment"]["Photoactivation"][
-            "laser_power"
-        ] = self.laser_power
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["wavelength"] = self.laser
+        self.parent_controller.configuration["experiment"]["Photoactivation"]["laser_power"] = self.laser_power
         self.parent_controller.configuration["experiment"]["Photoactivation"][
             "duration"
         ] = self.duration
@@ -256,8 +259,6 @@ class PhotoactivationController:
         self.parent_controller.configuration["experiment"]["Photoactivation"][
             "x_scaling_factor"
         ] = self.x_scaling_factor
-
-        print("updated configuration")
 
     def mark_position(self, *args):
         """Mark the current position of the microscope"""

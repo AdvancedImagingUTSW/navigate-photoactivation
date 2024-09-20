@@ -36,17 +36,18 @@
 # Local Imports
 from navigate.tools.decorators import FeatureList
 from model.features.photoactivation import Photoactivation
+from navigate.model.features.common_features import PrepareNextChannel
 
 
 @FeatureList
-def photoactivation_features():
+def photoactivation_features() -> list[dict]:
     """Return a list of photoactivation features.
 
     Returns
     -------
-    list
-        List of photoactivation features.
+    list[dict]
+        List of photoactivation features, stored as dictionaries.
     """
     return [
-        {"name": Photoactivation},
-    ]
+        {"name": PrepareNextChannel, }, {"name": Photoactivation, }, {"name": PrepareNextChannel, },
+         ]
